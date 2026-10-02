@@ -1,0 +1,50 @@
+services:
+  db:
+    image: postgres:14
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ceit_db
+      POSTGRES_USER: ceit_user
+      POSTGRES_PASSWORD: "123456"
+    # O banco fica acessível somente pela rede interna do Docker.
+    # Isso evita conflito com a porta 5432 do Windows/outros projetos.
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./sql/ceit.sql:/docker-entrypoint-initdb.d/01-ceit.sql:ro
+      - ./sql/auth.sql:/docker-entrypoint-initdb.d/02-auth.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ceit_user -d ceit_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    networks:
+      ceit_network:
+        aliases:
+          - db
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "5000:5000"
+    environment:
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_NAME: ceit_db
+      DB_USER: ceit_user
+      DB_PASSWORD: "123456"
+      SECRET_KEY: "chave-de-desenvolvimento-ceit"
+    networks:
+      - ceit_network
+
+networks:
+  ceit_network:
+    driver: bridge
+
+volumes:
+  pgdata:
+    external: true
+    name: ceit_pgdata
